@@ -16,6 +16,8 @@ import hudson.util.Secret;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
+import java.util.logging.Logger;
+
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.github.GHApp;
@@ -34,6 +36,7 @@ import static org.jenkinsci.plugins.github_branch_source.JwtHelper.createJWT;
 @SuppressFBWarnings(value = "SE_NO_SERIALVERSIONID", justification = "XStream")
 public class GitHubAppCredentials extends BaseStandardCredentials implements StandardUsernamePasswordCredentials {
 
+    private static final Logger LOGGER = Logger.getLogger(GitHubAppCredentials.class.getName());
     private static final String ERROR_AUTHENTICATING_GITHUB_APP = "Couldn't authenticate with GitHub app ID %s";
     private static final String NOT_INSTALLED = ", has it been installed to your GitHub organisation / user?";
 
@@ -151,9 +154,12 @@ public class GitHubAppCredentials extends BaseStandardCredentials implements Sta
 
         long now = System.currentTimeMillis();
         String appInstallationToken;
+        LOGGER.fine("[now: " + now + ", tokenCacheTime: " + tokenCacheTime);
         if (cachedToken != null && now - tokenCacheTime < JwtHelper.VALIDITY_MS /* extra buffer */ / 2) {
+            LOGGER.fine("Use cached token");
             appInstallationToken = cachedToken;
         } else {
+            LOGGER.fine("Generate a new token");
             appInstallationToken = generateAppInstallationToken(appID, privateKey.getPlainText(), apiUri, owner);
             cachedToken = appInstallationToken;
             tokenCacheTime = now;
