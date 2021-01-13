@@ -56,7 +56,7 @@ public class GitHubAppCredentials extends BaseStandardCredentials implements Sta
      *
      * Provided as one more possible avenue for debugging/stabilizing JENKINS-62249.
      */
-    private static long AFTER_TOKEN_GENERATION_DELAY_SECONDS =
+    static long AFTER_TOKEN_GENERATION_DELAY_SECONDS =
         Long.getLong(GitHubAppCredentials.class.getName() + ".AFTER_TOKEN_GENERATION_DELAY_SECONDS", 0);
 
     @NonNull
@@ -262,7 +262,7 @@ public class GitHubAppCredentials extends BaseStandardCredentials implements Sta
          * while retrieving a new token.
          * Non-final for testing/debugging purposes.
          */
-        static long STALE_BEFORE_EXPIRATION_SECONDS =
+        public static long STALE_BEFORE_EXPIRATION_SECONDS =
             Long.getLong(GitHubAppCredentials.class.getName() + ".STALE_BEFORE_EXPIRATION_SECONDS", Duration.ofMinutes(45).getSeconds());
 
         /**
@@ -282,7 +282,7 @@ public class GitHubAppCredentials extends BaseStandardCredentials implements Sta
          * If {@link #STALE_AFTER_SECONDS} is less than this value, {@link #STALE_AFTER_SECONDS} takes precedence over this value.
          * Minimum value of 1.
          */
-        static long NOT_STALE_MINIMUM_SECONDS =
+        public static long NOT_STALE_MINIMUM_SECONDS =
             Long.getLong(GitHubAppCredentials.class.getName() + ".NOT_STALE_MINIMUM_SECONDS", Duration.ofMinutes(1).getSeconds());
 
         private final Secret token;
