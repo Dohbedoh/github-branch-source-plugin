@@ -875,24 +875,6 @@ public class GitHubSCMSourceTest extends GitSCMSourceBase {
     }
   }
 
-  @Test
-  @Issue("JENKINS-68633")
-  public void doCheckCredentialsId() {
-    GitHubSCMSource.DescriptorImpl descriptor = (GitHubSCMSource.DescriptorImpl) source.getDescriptor();
-
-    // If no credentials are supplied, display the warning
-    FormValidation test = descriptor.doCheckCredentialsId(null, "", "", "", true);
-    assertThat(test.kind, is(FormValidation.Kind.WARNING));
-    assertThat(test.getMessage(), is("Credentials are recommended"));
-    test = descriptor.doCheckCredentialsId(null, "", "", "", false);
-    assertThat(test.kind, is(FormValidation.Kind.WARNING));
-    assertThat(test.getMessage(), is("Credentials are recommended"));
-
-    // If configureByUrl and credentials provided, always return OK
-    test = descriptor.doCheckCredentialsId(null, "", "", "test", true);
-    assertThat(test.kind, is(FormValidation.Kind.OK));
-  }
-
     @Test
   @Issue("JENKINS-65071")
   public void testCheckIncludesBranchSCMHeadType() throws Exception {

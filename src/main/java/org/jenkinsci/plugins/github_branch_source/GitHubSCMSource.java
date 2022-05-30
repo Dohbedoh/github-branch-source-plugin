@@ -2131,67 +2131,21 @@ public class GitHubSCMSource extends AbstractGitSCMSource {
         @QueryParameter String apiUri,
         @QueryParameter String repoOwner,
         @QueryParameter String value,
+        @QueryParameter String repositoryUrl,
         @QueryParameter boolean configuredByUrl) {
 
-      if (!configuredByUrl) {
-        return Connector.checkScanCredentials(context, apiUri, value, repoOwner);
-      } else if (value.isEmpty()) {
-          return FormValidation.warning("Credentials are recommended");
-      } else {
-        // Using the URL-based configuration, that has its own "Validate" button
-        return FormValidation.ok();
-      }
-    }
-
-    @RequirePOST
-    @Restricted(NoExternalUse.class)
-    public FormValidation doValidateRepositoryUrlAndCredentials(
-        @CheckForNull @AncestorInPath Item context,
-        @QueryParameter String repositoryUrl,
-        @QueryParameter String credentialsId,
-        @QueryParameter String repoOwner) {
-      if (context == null && !Jenkins.get().hasPermission(Jenkins.ADMINISTER)
-          || context != null && !context.hasPermission(Item.EXTENDED_READ)) {
-        return FormValidation.error(
-            "Unable to validate repository information"); // not supposed to be seeing this form
-      }
-      if (context != null && !context.hasPermission(CredentialsProvider.USE_ITEM)) {
-        return FormValidation.error(
-            "Unable to validate repository information"); // not permitted to try connecting with
-        // these credentials
-      }
-      GitHubRepositoryInfo info;
-
-      try {
-        info = GitHubRepositoryInfo.forRepositoryUrl(repositoryUrl);
-      } catch (IllegalArgumentException e) {
-        return FormValidation.error(e, e.getMessage());
-      }
-
-      StandardCredentials credentials =
-          Connector.lookupScanCredentials(context, info.getApiUri(), credentialsId, repoOwner);
-      StringBuilder sb = new StringBuilder();
-      try {
-        GitHub github = Connector.connect(info.getApiUri(), credentials);
+      if (configuredByUrl) {
+        GitHubRepositoryInfo info;
         try {
-          if (github.isCredentialValid()) {
-            sb.append("Credentials ok.");
-          }
-
-          GHRepository repo =
-              github.getRepository(info.getRepoOwner() + "/" + info.getRepository());
-          if (repo != null) {
-            sb.append(" Connected to ");
-            sb.append(repo.getHtmlUrl());
-            sb.append(".");
-          }
-        } finally {
-          Connector.release(github);
+          info = GitHubRepositoryInfo.forRepositoryUrl(repositoryUrl);
+        } catch (IllegalArgumentException e) {
+          return FormValidation.error(e, e.getMessage());
         }
-      } catch (IOException e) {
-        return FormValidation.error(e, "Error validating repository information. " + sb.toString());
+        return Connector.checkScanCredentials(
+            context, info.getApiUri(), value, info.getRepoOwner());
+      } else {
+        return Connector.checkScanCredentials(context, apiUri, value, repoOwner);
       }
-      return FormValidation.ok(sb.toString());
     }
 
     @Restricted(NoExternalUse.class)
@@ -2210,8 +2164,10 @@ public class GitHubSCMSource extends AbstractGitSCMSource {
         @QueryParameter String apiUri,
         @QueryParameter String scanCredentialsId,
         @QueryParameter String repoOwner,
+        @QueryParameter String repositoryUrl,
         @QueryParameter boolean configuredByUrl) {
-      return doCheckCredentialsId(context, apiUri, scanCredentialsId, repoOwner, configuredByUrl);
+      return doCheckCredentialsId(
+          context, apiUri, scanCredentialsId, repoOwner, repositoryUrl, configuredByUrl);
     }
 
     @Restricted(NoExternalUse.class)
