@@ -987,8 +987,8 @@ public class GitHubSCMNavigator extends SCMNavigator {
             final Iterable<GHRepository> repositories;
             if (!gitHubSCMNavigatorContext.getTopics().isEmpty()) {
               repositories =
-                  getGhRepositoriesBasedOnTopics(
-                      listener, github, gitHubSCMNavigatorContext.getTopics());
+                  searchRepositories(
+                      listener, github, gitHubSCMNavigatorContext);
             } else {
               repositories = myself.listRepositories(100);
             }
@@ -1094,9 +1094,15 @@ public class GitHubSCMNavigator extends SCMNavigator {
                     .listRepositories()
                     .withPageSize(100);
           } else if (!gitHubSCMNavigatorContext.getTopics().isEmpty()) {
+            listener
+              .getLogger()
+              .println(
+                GitHubConsoleNote.create(
+                  System.currentTimeMillis(),
+                  String.format("Looking up repositories for topics: '%s'", gitHubSCMNavigatorContext.getTopics())));
             repositories =
-                getGhRepositoriesBasedOnTopics(
-                    listener, github, gitHubSCMNavigatorContext.getTopics());
+                searchRepositories(
+                  listener, github, gitHubSCMNavigatorContext);
           } else {
             repositories = org.listRepositories(100);
           }
@@ -1247,16 +1253,23 @@ public class GitHubSCMNavigator extends SCMNavigator {
     }
   }
 
-  private Iterable<GHRepository> getGhRepositoriesBasedOnTopics(
-      final TaskListener listener, final GitHub github, final List<String> topics) {
-    listener
-        .getLogger()
-        .println(
-            GitHubConsoleNote.create(
-                System.currentTimeMillis(),
-                String.format("Looking up repositories for topics: '%s'", topics)));
+  private Iterable<GHRepository> searchRepositories(
+      final TaskListener listener, final GitHub github, final GitHubSCMNavigatorContext context) {
     final GHRepositorySearchBuilder ghRepositorySearchBuilder = github.searchRepositories();
-    topics.forEach(ghRepositorySearchBuilder::topic);
+    context.getTopics().forEach(ghRepositorySearchBuilder::topic);
+    if(context.isExcludeArchivedRepositories()) {
+      ghRepositorySearchBuilder.q("archived:false");
+    }
+    if(context.isExcludePrivateRepositories()) {
+      ghRepositorySearchBuilder.q("-is:private");
+    }
+    if(context.isExcludePublicRepositories()) {
+      ghRepositorySearchBuilder.q("-is:public");
+    }
+    if(context.isExcludeForkedRepositories()) {
+      ghRepositorySearchBuilder.q("fork:true");
+    }
+    // TODO: Whenever a team term is available for the GitHub Search API, we could use it here
     ghRepositorySearchBuilder.q("org:" + getRepoOwner());
     return ghRepositorySearchBuilder.list().withPageSize(100);
   }
