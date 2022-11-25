@@ -25,7 +25,6 @@
 package org.jenkinsci.plugins.github_branch_source;
 
 import static java.util.logging.Level.FINE;
-import static java.util.logging.Level.WARNING;
 
 import com.cloudbees.plugins.credentials.CredentialsMatcher;
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
@@ -41,10 +40,8 @@ import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.AbortException;
-import hudson.Extension;
 import hudson.Util;
 import hudson.model.Item;
-import hudson.model.PeriodicWork;
 import hudson.model.Queue;
 import hudson.model.TaskListener;
 import hudson.security.ACL;
@@ -62,11 +59,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
-import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -92,11 +86,6 @@ import org.kohsuke.github.extras.okhttp3.OkHttpConnector;
 @SuppressFBWarnings("DMI_RANDOM_USED_ONLY_ONCE") // https://github.com/spotbugs/spotbugs/issues/1539
 public class Connector {
   private static final Logger LOGGER = Logger.getLogger(Connector.class.getName());
-
-  private static final Map<ConnectionId, GitHubConnection> connections = new ConcurrentHashMap<>();
-  private static final Map<GitHub, ConnectionId> reverseLookup = new ConcurrentHashMap<>();
-
-  private static final Map<TaskListener, Map<GitHub, Void>> checked = new WeakHashMap<>();
   private static final long API_URL_REVALIDATE_MILLIS = TimeUnit.MINUTES.toMillis(5);
 
   private static final Random ENTROPY = new Random();
@@ -528,20 +517,7 @@ public class Connector {
     if (hub == null) {
       return;
     }
-
-    ConnectionId connectionId = reverseLookup.get(hub);
-    if (connectionId == null) {
-      return;
-    }
-
-    GitHubConnection record = connections.get(connectionId);
-    if (record != null) {
-      try {
-        record.release();
-      } catch (IOException e) {
-        LOGGER.log(WARNING, "There is a mismatch in connect and release calls.", e);
-      }
-    }
+    LOGGER.log(FINE, "No cache");
   }
 
   private static CredentialsMatcher githubScanCredentialsMatcher() {
@@ -627,18 +603,6 @@ public class Connector {
   /*package*/ static void checkConnectionValidity(
       String apiUri, @NonNull TaskListener listener, StandardCredentials credentials, GitHub github)
       throws IOException {
-    synchronized (checked) {
-      Map<GitHub, Void> hubs = checked.get(listener);
-      if (hubs != null && hubs.containsKey(github)) {
-        // only check if not already in use
-        return;
-      }
-      if (hubs == null) {
-        hubs = new WeakHashMap<>();
-        checked.put(listener, hubs);
-      }
-      hubs.put(github, null);
-    }
     if (credentials != null && !isCredentialValid(github)) {
       String message =
           String.format(
@@ -676,24 +640,6 @@ public class Connector {
     ApiRateLimitChecker.configureThreadLocalChecker(listener, github);
   }
 
-  @Extension
-  public static class UnusedConnectionDestroyer extends PeriodicWork {
-
-    @Override
-    public long getRecurrencePeriod() {
-      return TimeUnit.MINUTES.toMillis(5);
-    }
-
-    @Override
-    protected void doRun() throws Exception {
-      // Free any connection that is unused (zero refs)
-      // and has not been looked up or released for the last 30 minutes
-      long unusedThreshold = System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(30);
-
-      GitHubConnection.removeAllUnused(unusedThreshold);
-    }
-  }
-
   static class GitHubConnection {
     @NonNull private final GitHub gitHub;
 
@@ -723,20 +669,7 @@ public class Connector {
     private static GitHubConnection lookup(
         @NonNull ConnectionId connectionId, @NonNull Supplier<GitHubConnection> generator) {
       GitHubConnection record;
-      record =
-          connections.compute(
-              connectionId,
-              (id, connection) -> {
-                if (connection == null) {
-                  connection = generator.get();
-                  reverseLookup.put(connection.gitHub, id);
-                } else {
-                  connection.usageCount.incrementAndGet();
-                  connection.lastUsed.set(System.currentTimeMillis());
-                }
-
-                return connection;
-              });
+      record = generator.get();
       return record;
     }
 
@@ -751,35 +684,6 @@ public class Connector {
       }
 
       this.lastUsed.compareAndSet(this.lastUsed.get(), System.currentTimeMillis());
-    }
-
-    private static void removeAllUnused(long threshold) throws IOException {
-      for (ConnectionId connectionId : connections.keySet()) {
-        connections.computeIfPresent(
-            connectionId,
-            (id, record) -> {
-              long lastUse = record.lastUsed.get();
-              if (record.usageCount.get() == 0 && lastUse < threshold) {
-                try {
-                  if (record.cache != null && record.cleanupCacheFolder) {
-                    record.cache.delete();
-                    record.cache.close();
-                  }
-                } catch (IOException e) {
-                  LOGGER.log(
-                      WARNING,
-                      "Exception removing cache directory for unused connection: " + id,
-                      e);
-                }
-                reverseLookup.remove(record.gitHub);
-
-                // returning null will remove the connection
-                record = null;
-              }
-
-              return record;
-            });
-      }
     }
 
     public void verifyConnection() throws IOException {
