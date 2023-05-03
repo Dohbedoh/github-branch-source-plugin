@@ -1670,11 +1670,12 @@ public class GitHubSCMNavigator extends SCMNavigator {
   }
 
   private static boolean determinePrivateMode(String apiUri) {
-    if (apiUri == null || apiUri.equals(GitHubServerConfig.GITHUB_URL)) {
-      return false;
-    }
     try {
-      GitHub.connectToEnterpriseAnonymously(apiUri).checkApiUrlValidity();
+      if (apiUri == null || apiUri.equals(GitHubServerConfig.GITHUB_URL)) {
+        GitHub.connectAnonymously().checkApiUrlValidity();
+      } else {
+        GitHub.connectToEnterpriseAnonymously(apiUri).checkApiUrlValidity();
+      }
     } catch (MalformedURLException e) {
       // URL is bogus so there is never going to be an avatar - or anything else come to think of it
       return true;
