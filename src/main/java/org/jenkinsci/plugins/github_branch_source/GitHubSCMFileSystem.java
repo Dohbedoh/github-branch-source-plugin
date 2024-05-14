@@ -237,8 +237,7 @@ public class GitHubSCMFileSystem extends SCMFileSystem implements GitHubClosable
                 throws IOException, InterruptedException {
             GitHubSCMSource src = (GitHubSCMSource) source;
             String apiUri = src.getApiUri();
-            StandardCredentials credentials = Connector.lookupScanCredentials(
-                    (Item) src.getOwner(), apiUri, src.getScanCredentialsId(), src.getRepoOwner());
+            StandardCredentials credentials = src.getScanCredentials((Item) src.getOwner());
 
             // Github client and validation
             GitHub github = Connector.connect(apiUri, credentials);

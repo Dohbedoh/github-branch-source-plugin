@@ -217,6 +217,8 @@ public class GitHubSCMNavigator extends SCMNavigator {
 
     private static final LoadingCache<String, Boolean> privateModeCache = createPrivateModeCache();
 
+    private static final ThreadLocal<StandardCredentials> credentials = new ThreadLocal<>();
+
     /**
      * Constructor.
      *
@@ -255,6 +257,16 @@ public class GitHubSCMNavigator extends SCMNavigator {
         if (!GitHubSCMSource.DescriptorImpl.SAME.equals(checkoutCredentialsId)) {
             traits.add(new SSHCheckoutTrait(checkoutCredentialsId));
         }
+    }
+
+    @CheckForNull
+    private StandardCredentials getCredentials(@CheckForNull Item context) {
+        if (credentials.get() != null) {
+            return credentials.get();
+        }
+        StandardCredentials c = Connector.lookupScanCredentials(context, apiUri, credentialsId, repoOwner);
+        credentials.set(c);
+        return c;
     }
 
     /**
@@ -967,8 +979,7 @@ public class GitHubSCMNavigator extends SCMNavigator {
             throw new AbortException("Must specify user or organization");
         }
 
-        StandardCredentials credentials =
-                Connector.lookupScanCredentials((Item) observer.getContext(), apiUri, credentialsId, repoOwner);
+        StandardCredentials credentials = getCredentials((Item) observer.getContext());
 
         // Github client and validation
         GitHub github = Connector.connect(apiUri, credentials);
@@ -1270,8 +1281,7 @@ public class GitHubSCMNavigator extends SCMNavigator {
             throw new AbortException("Must specify user or organization");
         }
 
-        StandardCredentials credentials =
-                Connector.lookupScanCredentials((Item) observer.getContext(), apiUri, credentialsId, repoOwner);
+        StandardCredentials credentials = getCredentials((Item) observer.getContext());
 
         // Github client and validation
         GitHub github;
@@ -1557,8 +1567,7 @@ public class GitHubSCMNavigator extends SCMNavigator {
         listener.getLogger().printf("Looking up details of %s...%n", getRepoOwner());
         List<Action> result = new ArrayList<>();
         String apiUri = Util.fixEmptyAndTrim(getApiUri());
-        StandardCredentials credentials =
-                Connector.lookupScanCredentials((Item) owner, getApiUri(), credentialsId, repoOwner);
+        StandardCredentials credentials = getCredentials((Item) owner);
         GitHub hub = Connector.connect(getApiUri(), credentials);
         Connector.configureLocalRateLimitChecker(listener, hub);
         boolean privateMode = !isEnableAvatar() || determinePrivateMode(apiUri);
@@ -1655,8 +1664,7 @@ public class GitHubSCMNavigator extends SCMNavigator {
         GitHubWebHook.get().registerHookFor(owner);
         try {
             // FIXME MINOR HACK ALERT
-            StandardCredentials credentials =
-                    Connector.lookupScanCredentials((Item) owner, getApiUri(), credentialsId, repoOwner);
+            StandardCredentials credentials = getCredentials((Item) owner);
             GitHub hub = Connector.connect(getApiUri(), credentials);
             try {
                 GitHubOrgWebHook.register(hub, repoOwner);

@@ -25,19 +25,14 @@ package org.jenkinsci.plugins.github_branch_source;
 
 import com.cloudbees.jenkins.plugins.sshcredentials.SSHUserPrivateKey;
 import com.cloudbees.plugins.credentials.Credentials;
-import com.cloudbees.plugins.credentials.CredentialsMatchers;
-import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.IdCredentials;
 import com.cloudbees.plugins.credentials.common.StandardCredentials;
-import com.cloudbees.plugins.credentials.domains.URIRequirementBuilder;
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.model.Item;
-import hudson.model.Queue;
 import hudson.plugins.git.GitSCM;
 import hudson.plugins.git.browser.GithubWeb;
-import hudson.security.ACL;
 import java.net.URL;
 import java.util.HashSet;
 import java.util.Random;
@@ -124,7 +119,7 @@ public class GitHubSCMBuilder extends GitSCMBuilder<GitHubSCMBuilder> {
         if (repoUrl != null) {
             withBrowser(new GithubWeb(repoUrl));
         }
-        withCredentials(credentialsId(), null);
+        this.uriResolver = uriResolver(source.getScanCredentials(source.getOwner()));
     }
 
     /**
@@ -189,7 +184,9 @@ public class GitHubSCMBuilder extends GitSCMBuilder<GitHubSCMBuilder> {
      *     {@code null} to detect the the protocol based on the credentialsId. Defaults to HTTP if
      *     credentials are {@code null}. Enables support for blank SSH credentials.
      * @return {@code this} for method chaining.
+     * @deprecated Use {@link #withCredentials(String)} and {@link #withResolver(RepositoryUriResolver)}
      */
+    @Deprecated
     @NonNull
     public GitHubSCMBuilder withCredentials(String credentialsId, RepositoryUriResolver uriResolver) {
         if (uriResolver == null) {
@@ -200,6 +197,12 @@ public class GitHubSCMBuilder extends GitSCMBuilder<GitHubSCMBuilder> {
         return withCredentials(credentialsId);
     }
 
+    @NonNull
+    public GitHubSCMBuilder withResolver(RepositoryUriResolver uriResolver) {
+        this.uriResolver = uriResolver;
+        return this;
+    }
+
     /**
      * Returns a {@link RepositoryUriResolver} according to credentials configuration.
      *
@@ -207,26 +210,37 @@ public class GitHubSCMBuilder extends GitSCMBuilder<GitHubSCMBuilder> {
      * @param apiUri the API url
      * @param credentialsId the credentials.
      * @return a {@link RepositoryUriResolver}
+     * @deprecated use {@link #uriResolver(com.cloudbees.plugins.credentials.common.StandardCredentials)}
+     * @since TODO
      */
+    @Deprecated
     @NonNull
     public static RepositoryUriResolver uriResolver(
             @CheckForNull Item context, @NonNull String apiUri, @CheckForNull String credentialsId) {
         if (credentialsId == null) {
             return HTTPS;
         } else {
-            StandardCredentials credentials = CredentialsMatchers.firstOrNull(
-                    CredentialsProvider.lookupCredentials(
-                            StandardCredentials.class,
-                            context,
-                            context instanceof Queue.Task
-                                    ? ((Queue.Task) context).getDefaultAuthentication()
-                                    : ACL.SYSTEM,
-                            URIRequirementBuilder.create()
-                                    .withHostname(RepositoryUriResolver.hostnameFromApiUri(apiUri))
-                                    .build()),
-                    CredentialsMatchers.allOf(
-                            CredentialsMatchers.withId(credentialsId),
-                            CredentialsMatchers.instanceOf(StandardCredentials.class)));
+            StandardCredentials credentials = Connector.lookupScanCredentials(context, apiUri, credentialsId, null);
+            if (credentials instanceof SSHUserPrivateKey) {
+                return SSH;
+            } else {
+                // Defaults to HTTP/HTTPS
+                return HTTPS;
+            }
+        }
+    }
+
+    /**
+     * Returns a {@link RepositoryUriResolver} according to credentials configuration.
+     *
+     * @param credentials the credentials
+     * @return a {@link RepositoryUriResolver}
+     */
+    @NonNull
+    public static RepositoryUriResolver uriResolver(StandardCredentials credentials) {
+        if (credentials == null) {
+            return HTTPS;
+        } else {
             if (credentials instanceof SSHUserPrivateKey) {
                 return SSH;
             } else {

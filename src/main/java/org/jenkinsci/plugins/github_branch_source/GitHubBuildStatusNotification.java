@@ -179,10 +179,7 @@ public class GitHubBuildStatusNotification {
                 return null;
             }
             if (source.getScanCredentialsId() != null) {
-                return Connector.connect(
-                        source.getApiUri(),
-                        Connector.lookupScanCredentials(
-                                job, source.getApiUri(), source.getScanCredentialsId(), source.getRepoOwner()));
+                return Connector.connect(source.getApiUri(), source.getScanCredentials(job));
             }
         }
         return null;
